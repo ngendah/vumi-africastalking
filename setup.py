@@ -11,6 +11,7 @@ setup(
     packages=find_packages(),
     install_requires=[
         'vumi>=0.6.0',
+        'mock'
     ],
     classifiers=[
         'Intended Audience :: Developers',

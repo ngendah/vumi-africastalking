@@ -28,9 +28,14 @@ class AfricasTalkingTransportConfig(HttpRpcTransportConfig):
 class AfricasTalkingTransport(HttpRpcTransport):
     transport_type = 'sms'
     transport_name = 'at_transport'
-    agent_factory = Agent(reactor)
 
     CONFIG_CLASS = AfricasTalkingTransportConfig
+
+    def agent_factory(self):
+        agent_factory = Agent(reactor)
+        if 'agent_factory' in self.config:
+            agent_factory = self.config['agent_factory']
+        return agent_factory
 
     @inlineCallbacks
     def setup_transport(self):
@@ -63,7 +68,7 @@ class AfricasTalkingTransport(HttpRpcTransport):
             'message': message.payload['content'].encode('utf-8'),
             'bulkSMSMode': 0,
         }
-        http_client = HTTPClient(self.agent_factory)
+        http_client = HTTPClient(self.agent_factory())
         r = yield http_client.post(
             url=self.outbound_url,
             data=json.dumps(outbound_msg),

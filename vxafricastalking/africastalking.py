@@ -31,6 +31,7 @@ class AfricasTalkingTransport(HttpRpcTransport):
 
     CONFIG_CLASS = AfricasTalkingTransportConfig
 
+    @property
     def agent_factory(self):
         agent_factory = Agent(reactor)
         if 'agent_factory' in self.config:
@@ -53,9 +54,14 @@ class AfricasTalkingTransport(HttpRpcTransport):
         self.username = config.username
         yield super(AfricasTalkingTransport, self).setup_transport()
 
+    def emit(self, msg):
+        super(AfricasTalkingTransport, self).emit(
+            "AfricasTalkingTransport {}".format(msg)
+        )
+
     @inlineCallbacks
     def handle_outbound_message(self, message):
-        self.emit("HttpRpcTransport consuming %s" % (message))
+        self.emit("consuming %s" % message)
         message_id = message['message_id']
         missing_fields = self.ensure_message_values(
             message, ['to_addr', 'content']
@@ -68,14 +74,15 @@ class AfricasTalkingTransport(HttpRpcTransport):
             'message': message.payload['content'].encode('utf-8'),
             'bulkSMSMode': 0,
         }
-        http_client = HTTPClient(self.agent_factory())
-        r = yield http_client.post(
+        self.emit("outbound message {}".format(outbound_msg))
+        http_client = HTTPClient(self.agent_factory)
+        response = yield http_client.post(
             url=self.outbound_url,
             data=json.dumps(outbound_msg),
             headers=self.headers,
             allow_redirects=False,
         )
-        validate = yield self.validate_outbound(r)
+        validate = yield self.validate_outbound(response)
         if validate['success']:
             yield self.outbound_success(message_id)
         else:
@@ -88,6 +95,7 @@ class AfricasTalkingTransport(HttpRpcTransport):
 
     @inlineCallbacks
     def validate_outbound(self, response):
+        self.emit("response {}".format(response.__dict__))
         if response.code == http.OK:
             returnValue({'success': True})
         else:

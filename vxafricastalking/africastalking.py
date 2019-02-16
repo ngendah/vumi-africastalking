@@ -1,5 +1,3 @@
-import json
-
 from treq.client import HTTPClient
 
 from twisted.internet import reactor
@@ -9,6 +7,9 @@ from twisted.web.client import Agent
 
 from vumi.config import ConfigText
 from vumi.transports.httprpc.httprpc import HttpRpcTransport, HttpRpcTransportConfig
+
+REQUEST_FAILURE = 'Failure'
+REQUEST_SUCCESS = 'success'
 
 
 class AfricasTalkingTransportConfig(HttpRpcTransportConfig):
@@ -46,10 +47,10 @@ class AfricasTalkingTransport(HttpRpcTransport):
             self.outbound_url = config.outbound_sandbox_url
         self.outbound_url += config.send_sms_api_endpoint
         self.headers = {
-            'Content-Type': ['application/json'],
+            'Content-Type': 'application/x-www-form-urlencoded',
             'Accept': 'application/json',
             'User-Agent': 'africastalking-vumi/0.1.0',
-            'ApiKey': config.api_key,
+            'apikey': config.api_key,
         }
         self.username = config.username
         yield super(AfricasTalkingTransport, self).setup_transport()
@@ -61,6 +62,8 @@ class AfricasTalkingTransport(HttpRpcTransport):
 
     @inlineCallbacks
     def handle_outbound_message(self, message):
+        # The transport does not make any attempt to
+        # interpret AfricasTalking responses
         self.emit("consuming %s" % message)
         message_id = message['message_id']
         missing_fields = self.ensure_message_values(
@@ -70,69 +73,54 @@ class AfricasTalkingTransport(HttpRpcTransport):
             returnValue(self.reject_message(message, missing_fields))
         outbound_msg = {
             'username': self.username,
-            'to': message.payload['to_addr'],
+            'to': ','.join(message.payload['to_addr']),
             'message': message.payload['content'].encode('utf-8'),
-            'bulkSMSMode': 0,
+            'bulkSMSMode': 1,
         }
         self.emit("outbound message {}".format(outbound_msg))
         http_client = HTTPClient(self.agent_factory)
-        response = yield http_client.post(
+        args = dict(
             url=self.outbound_url,
-            data=json.dumps(outbound_msg),
+            data=outbound_msg,
             headers=self.headers,
-            allow_redirects=False,
+            allow_redirects=False
         )
+        response = yield http_client.post(**args)
         validate = yield self.validate_outbound(response)
-        if validate['success']:
-            yield self.outbound_success(message_id)
-        else:
-            yield self.outbound_failure(
-                message_id=message_id,
-                message='Message not sent: %s' % validate['message'],
-                status_type=validate['status'],
-                details=validate['details'],
-            )
+        validate['message_id'] = message_id
+        yield self.outbound_status(**validate)
 
     @inlineCallbacks
     def validate_outbound(self, response):
         self.emit("response {}".format(response.__dict__))
         if response.code == http.OK:
-            returnValue({'success': True})
-        else:
-            res = yield response.json()
+            result = yield response.json()
             returnValue({
-                'success': False,
-                'message': 'bad response from AfricasTalking',
-                'status': 'bad_response',
-                'details': {
-                    'error': res['description'],
-                    'res_code': response.code,
-                },
+                'status': REQUEST_SUCCESS,
+                'message': result,
+            })
+        else:
+            result = yield response.text()
+            returnValue({
+                'status': REQUEST_FAILURE,
+                'message': result,
             })
 
     @inlineCallbacks
-    def outbound_failure(self, status_type, message_id, message, details):
-        yield self.publish_nack(message_id, message)
-        yield self.add_status_bad_outbound(status_type, message, details)
-
-    @inlineCallbacks
-    def outbound_success(self, message_id):
-        yield self.publish_ack(message_id, message_id)
-        yield self.add_status_good_outbound()
-
-    def add_status_bad_outbound(self, status_type, message, details):
-        return self.add_status(
-            status='down',
-            component='africastalking_outbound',
-            type=status_type,
-            message=message,
-            details=details,
-        )
-
-    def add_status_good_outbound(self):
-        return self.add_status(
-            status='ok',
-            component='africastalking_outbound',
-            type='good_outbound_request',
-            message='Outbound request successful',
-        )
+    def outbound_status(self, status, message, message_id):
+        if status == REQUEST_SUCCESS:
+            self.add_status(
+                status='ok',
+                component='africastalking_outbound',
+                type='good_outbound_request',
+                message=message,
+            )
+            yield self.publish_ack(message_id, message)
+        else:
+            self.add_status(
+                status='down',
+                component='africastalking_outbound',
+                type='bad_outbound_request',
+                message=message,
+            )
+            yield self.publish_nack(message_id, message)

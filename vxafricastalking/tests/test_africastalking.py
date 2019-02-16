@@ -29,6 +29,23 @@ class FakeResponse(object):
         self.previousResponse = response
 
 
+AT_RESPONSE = b"""
+{
+"SMSMessageData": {
+    "Message": "Sent to 1/1 Total Cost: KES 0.8000",
+    "Recipients": [
+        {
+            "statusCode": 101,
+            "number": "+254978345",
+            "cost": "KES 0.8000",
+            "status": "Success",
+            "messageId": "ATXid_d4e696eaebb289503ea89cfd9ce280a3"
+        }
+    ]
+ }
+}"""
+
+
 class TestAfricasTalkingTransport(VumiTestCase):
 
     @inlineCallbacks
@@ -48,10 +65,11 @@ class TestAfricasTalkingTransport(VumiTestCase):
 
     @inlineCallbacks
     def test_outbound_ack_ok(self):
-        response = mock.Mock(
-            code=200,
-            content={},
-            headers=Headers({}))
+        content = AT_RESPONSE
+        headers = Headers({
+            b'Content-Type': [b'application/json; charset=utf-8']
+        })
+        response = _Response(FakeResponse(200, headers, content), None)
         self.agent_factory.request.return_value = succeed(response)
         msg = yield self.helper.make_dispatch_outbound('hi')
         [ack] = yield self.helper.wait_for_dispatched_events(1)
@@ -60,7 +78,7 @@ class TestAfricasTalkingTransport(VumiTestCase):
 
     @inlineCallbacks
     def test_outbound_nack_ok(self):
-        content = b'{"description": "bad request"}'
+        content = AT_RESPONSE
         headers = Headers({
             b'Content-Type': [b'application/json; charset=utf-8']
         })
@@ -73,15 +91,15 @@ class TestAfricasTalkingTransport(VumiTestCase):
 
     @inlineCallbacks
     def test_outbound_with_list_phones_ack_ok(self):
-        response = mock.Mock(
-            code=200,
-            content={},
-            headers=Headers({}))
+        content = b'{}'
+        headers = Headers({
+            b'Content-Type': [b'application/json; charset=utf-8']
+        })
+        response = _Response(FakeResponse(200, headers, content), None)
         self.agent_factory.request.return_value = succeed(response)
         msg = yield self.helper.make_dispatch_outbound(
             'hi',
             to_addr=['+254745009876', '+254796008123'],
-            to_addr_type='list',
         )
         [ack] = yield self.helper.wait_for_dispatched_events(1)
         self.assertEqual(ack['event_type'], 'ack')
@@ -89,13 +107,11 @@ class TestAfricasTalkingTransport(VumiTestCase):
 
     @inlineCallbacks
     def test_request_headers_ok(self):
-        response = mock.Mock(
-            code=200,
-            content={},
-            headers=Headers({
-                b'Content-Type': [b'application/json; charset=utf-8']
-            })
-        )
+        content = b'{}'
+        headers = Headers({
+            b'Content-Type': [b'application/json; charset=utf-8']
+        })
+        response = _Response(FakeResponse(200, headers, content), None)
         fbp_patcher = mock.patch('treq.client.FileBodyProducer')
         FileBodyProducer = fbp_patcher.start()
         self.addCleanup(fbp_patcher.stop)
@@ -106,7 +122,7 @@ class TestAfricasTalkingTransport(VumiTestCase):
             b'https://api.sandbox.africastalking.com/version1/messaging',
             Headers({
                 'apikey': ['test'],
-                'content-type': ['application/json'],
+                'content-type': ['application/x-www-form-urlencoded'],
                 'accept-encoding': ['gzip'],
                 'accept': ['application/json'],
                 'user-agent': ['africastalking-vumi/0.1.0']

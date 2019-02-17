@@ -12,7 +12,7 @@ setup(
     version=read_file('VERSION'),
     license='BSD',
     description='AfricasTalking transport for Vumi and Junebug',
-    long_description=read_file('README.rst'),
+    long_description='',
     author='Ngenda Henry',
     author_email='ngendahk@gmail.com',
     packages=find_packages(),

@@ -1,1 +1,0 @@
-# AfricasTalking Transport for Vumi

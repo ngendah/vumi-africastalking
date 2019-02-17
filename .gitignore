@@ -25,3 +25,5 @@ var/
 *.egg
 
 .idea/
+_trial_temp/
+.tox/

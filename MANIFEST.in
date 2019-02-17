@@ -1,0 +1,7 @@
+# Include the README
+include *.rst
+
+# other includes
+include LICENSE
+include VERSION
+include requirements.txt

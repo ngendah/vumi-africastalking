@@ -1,11 +1,14 @@
+import json
 import mock
 
+from datetime import datetime as dt
 from twisted.internet.defer import inlineCallbacks, succeed
-from vumi.tests.helpers import VumiTestCase
-from vumi.transports.httprpc.tests.helpers import HttpRpcTransportHelper
 from twisted.web.client import Agent
 from twisted.web.http_headers import Headers
 from treq.client import _Response
+from vumi.tests.helpers import VumiTestCase
+from vumi.utils import http_request, http_request_full
+from vumi.transports.httprpc.tests.helpers import HttpRpcTransportHelper
 
 from vxafricastalking.africastalking import AfricasTalkingTransport
 
@@ -54,7 +57,7 @@ class TestAfricasTalkingTransport(VumiTestCase):
         self.config = {
             'username': 'sandbox',
             'api_key': 'test',
-            'web_path': '/at',
+            'web_path': 'at/',
             'agent_factory': self.agent_factory,
         }
         self.helper = self.add_helper(
@@ -62,6 +65,12 @@ class TestAfricasTalkingTransport(VumiTestCase):
         )
         self.transport = yield self.helper.get_transport(self.config)
         self.transport_url = self.transport.get_transport_url()
+
+    def make_endpoint(self):
+        return "{}{}".format(
+            self.transport_url,
+            self.config['web_path']
+        )
 
     @inlineCallbacks
     def test_outbound_ack_ok(self):
@@ -129,3 +138,27 @@ class TestAfricasTalkingTransport(VumiTestCase):
             }),
             FileBodyProducer.return_value
         )
+
+    @inlineCallbacks
+    def test_health(self):
+        result = yield http_request(
+            self.transport_url + "health", "", method='GET')
+        self.assertEqual(json.loads(result), {'pending_requests': 0})
+
+    @inlineCallbacks
+    def test_inbound_ok(self):
+        url = self.make_endpoint()
+        response = yield http_request_full(
+            url,
+            data=json.dumps({
+                'date': dt.utcnow().strftime('%c'),
+                'to': '254987456',
+                'from': '254378098',
+                'text': 'hi',
+            }),
+            headers=Headers({
+                b'Content-Type': [b'application/json; charset=utf-8']
+            })
+        )
+        [msg] = self.helper.get_dispatched_inbound()
+        self.assertEqual(200, response.code)

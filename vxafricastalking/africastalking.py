@@ -7,7 +7,10 @@ from twisted.web import http
 from twisted.web.client import Agent
 
 from vumi.config import ConfigText
-from vumi.transports.httprpc.httprpc import HttpRpcTransport, HttpRpcTransportConfig
+from vumi.transports.httprpc.httprpc import (
+    HttpRpcTransport,
+    HttpRpcTransportConfig,
+)
 
 REQUEST_FAILURE = 'Failure'
 REQUEST_SUCCESS = 'success'
@@ -16,7 +19,8 @@ REQUEST_SUCCESS = 'success'
 class AfricasTalkingTransportConfig(HttpRpcTransportConfig):
     api_key = ConfigText('API key', static=True, required=True)
     username = ConfigText('User name', static=True, required=True)
-    send_sms_api_endpoint = ConfigText('API endpoint', static=True, default='/version1/messaging')
+    send_sms_api_endpoint = ConfigText(
+        'API endpoint', static=True, default='/version1/messaging')
     outbound_sandbox_url = ConfigText(
         'Sandbox URL', static=True,
         default='https://api.sandbox.africastalking.com'
@@ -51,7 +55,8 @@ class ContentDecoder(object):
             'application/json': JsonDecoder,
         }
         content_type = headers.getRawHeaders('content-type')
-        c_type = content_type[0] if type(content_type) is list else content_type
+        c_type = content_type[0] if type(
+            content_type) is list else content_type
         if ';' in c_type:
             c_type = c_type.split(';')[0]
         return content_decoders.get(c_type, TextDecoder)
@@ -156,7 +161,8 @@ class AfricasTalkingTransport(HttpRpcTransport):
             json.dumps({'message_id': message_id})
         )
 
-    def get_field_values(self, request, expected_fields, ignored_fields=frozenset()):
+    def get_field_values(self, request, expected_fields,
+                         ignored_fields=frozenset()):
         if request.method == 'GET':
             return super(AfricasTalkingTransport, self).get_field_values(
                 request,
